@@ -1,13 +1,6 @@
 # Environment and configuration helpers for AllerSense backend
-from pydantic import BaseSettings
-
-class Settings(BaseSettings):
-    app_name: str = "AllerSense"
-    debug: bool = True
-
-settings = Settings()
-from pydantic_settings import BaseSettings
 from functools import lru_cache
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
