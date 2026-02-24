@@ -1,6 +1,25 @@
-fastapi
-uvicorn[standard]
-sqlalchemy
-pydantic
-redis
-httpx
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+sqlalchemy==2.0.36
+alembic==1.14.0
+asyncpg==0.30.0
+psycopg2-binary==2.9.10
+pydantic==2.10.3
+pydantic-settings==2.7.0
+python-multipart==0.0.18
+python-jose[cryptography]==3.3.0
+httpx==0.28.1
+redis==5.2.1
+Pillow==11.0.0
+pytesseract==0.3.13
+openai==1.58.1
+passlib[bcrypt]==1.7.4
+tenacity==9.0.0
+structlog==24.4.0
+
+# --- Optional: HuggingFace local backend (AI_BACKEND=huggingface_local) ---
+# Uncomment these if you want to run models locally via transformers:
+# transformers>=4.45.0
+# torch>=2.2.0
+# accelerate>=0.34.0
+# sentencepiece>=0.2.0

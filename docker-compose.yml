@@ -14,3 +14,137 @@ services:
       - ./frontend:/usr/src/app
 
 # NOTE: Replace with real configs for production
+version: "3.9"
+
+services:
+  # ============================================
+  # PostgreSQL Database
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: medguard
+      POSTGRES_PASSWORD: medguard_secret
+      POSTGRES_DB: medguard
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medguard"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Valkey (Redis-compatible cache)
+  # ============================================
+  valkey:
+    image: valkey/valkey:8-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - valkeydata:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Ollama (MedGemma model serving)
+  # ============================================
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    # Uncomment below for GPU support:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # ============================================
+  # FastAPI Backend
+  # ============================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://medguard:medguard_secret@postgres:5432/medguard
+      DATABASE_URL_SYNC: postgresql://medguard:medguard_secret@postgres:5432/medguard
+      REDIS_URL: redis://valkey:6379/0
+      AI_BACKEND: ollama
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: medgemma:4b
+      HF_MODEL_ID: google/medgemma-4b-it
+      HF_TOKEN: ""
+      APP_ENV: development
+      APP_DEBUG: "true"
+      CORS_ORIGINS: "http://localhost:3000,http://localhost:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ============================================
+  # Database Seeder (runs once)
+  # ============================================
+  seed:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: python -m scripts.seed_data
+    environment:
+      DATABASE_URL: postgresql+asyncpg://medguard:medguard_secret@postgres:5432/medguard
+      DATABASE_URL_SYNC: postgresql://medguard:medguard_secret@postgres:5432/medguard
+      REDIS_URL: redis://valkey:6379/0
+      AI_BACKEND: ollama
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: medgemma:4b
+      APP_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    profiles:
+      - seed
+
+  # ============================================
+  # Next.js Frontend
+  # ============================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  valkeydata:
+  ollama_models:
