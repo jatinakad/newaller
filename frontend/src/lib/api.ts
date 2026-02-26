@@ -17,6 +17,7 @@ export interface Warning {
   ingredient: string;
   allergen: string;
   message: string;
+  reasoning?: string;
   evidence: { source: string; detail: string };
 }
 
@@ -30,6 +31,7 @@ export interface AlternativeDrug {
 export interface DrugCheckResult {
   drug: { rxcui: string; name: string };
   signal: 'GREEN' | 'YELLOW' | 'RED';
+  reasoning?: string;
   warnings: Warning[];
   alternatives: AlternativeDrug[];
 }
@@ -56,6 +58,8 @@ export interface PatientReport {
   file_size: number;
   content_type: string;
   status: string;
+  version: number;
+  is_latest: boolean;
   extracted_text?: string;
   uploaded_at: string;
   extracted_at?: string;
@@ -183,13 +187,21 @@ export async function getReports(
   return res.json();
 }
 
-export async function deleteReport(
+export async function replaceReport(
   patientId: string,
   reportId: string,
-): Promise<void> {
+  file: File,
+): Promise<PatientReport> {
+  const formData = new FormData();
+  formData.append('file', file);
+
   const res = await fetch(
     `${API_BASE}/api/v1/patients/${encodeURIComponent(patientId)}/reports/${encodeURIComponent(reportId)}`,
-    { method: 'DELETE' },
+    { method: 'PUT', body: formData },
   );
-  if (!res.ok) throw new Error('Failed to delete report');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Report replace failed');
+  }
+  return res.json();
 }

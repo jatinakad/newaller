@@ -20,6 +20,7 @@ class Warning(BaseModel):
     ingredient: str
     allergen: str
     message: str
+    reasoning: str = ""
     evidence: dict
 
 
@@ -33,6 +34,7 @@ class AlternativeDrug(BaseModel):
 class DrugCheckResult(BaseModel):
     drug: dict  # {rxcui, name}
     signal: str  # GREEN, YELLOW, RED
+    reasoning: str = ""
     warnings: list[Warning] = []
     alternatives: list[AlternativeDrug] = []
 

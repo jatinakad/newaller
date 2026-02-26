@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import String, Text, Integer, ForeignKey, Index, DateTime
+from sqlalchemy import String, Text, Integer, Boolean, ForeignKey, Index, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.session import Base
@@ -17,6 +17,9 @@ class PatientReport(Base):
     content_type: Mapped[str] = mapped_column(String(100), nullable=False)
     extracted_text: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending, extracting, ready, failed
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    superseded_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("patient_reports.id"), nullable=True)
+    is_latest: Mapped[bool] = mapped_column(default=True)
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     extracted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

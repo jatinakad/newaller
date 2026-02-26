@@ -131,10 +131,11 @@ async def upload_and_extract(
 
 
 async def get_patient_reports(db: AsyncSession, patient_id: uuid.UUID) -> list[PatientReport]:
-    """Get all reports for a patient."""
+    """Get all latest-version reports for a patient."""
     result = await db.execute(
         select(PatientReport)
         .where(PatientReport.patient_id == patient_id)
+        .where(PatientReport.is_latest == True)
         .order_by(PatientReport.uploaded_at.desc())
     )
     return list(result.scalars().all())
@@ -148,26 +149,43 @@ async def get_report_by_id(db: AsyncSession, report_id: uuid.UUID) -> PatientRep
     return result.scalar_one_or_none()
 
 
-async def delete_report(db: AsyncSession, report: PatientReport) -> None:
-    """Delete a report and its file."""
-    try:
-        if os.path.exists(report.file_path):
-            os.remove(report.file_path)
-    except Exception as e:
-        logger.warning("report_file_delete_failed", error=str(e))
+async def replace_report(
+    db: AsyncSession,
+    old_report: PatientReport,
+    patient: Patient,
+    filename: str,
+    file_bytes: bytes,
+    content_type: str,
+) -> PatientReport:
+    """Upload a new version of a report. Old version is kept but marked superseded."""
+    new_report = await upload_and_extract(
+        db=db,
+        patient=patient,
+        filename=filename,
+        file_bytes=file_bytes,
+        content_type=content_type,
+    )
+    new_report.version = old_report.version + 1
 
-    await db.delete(report)
+    old_report.is_latest = False
+    old_report.superseded_by = new_report.id
+
     await db.commit()
+    await db.refresh(new_report)
+    return new_report
 
 
 async def get_all_report_texts(db: AsyncSession, patient_id: uuid.UUID) -> str:
-    """Get concatenated extracted text from all ready reports for a patient."""
+    """Get concatenated extracted text from all latest ready reports for a patient."""
     result = await db.execute(
         select(PatientReport.extracted_text)
         .where(PatientReport.patient_id == patient_id)
         .where(PatientReport.status == "ready")
+        .where(PatientReport.is_latest == True)
         .where(PatientReport.extracted_text.isnot(None))
         .order_by(PatientReport.uploaded_at.desc())
     )
     texts = [row[0] for row in result.all() if row[0]]
     return "\n\n---\n\n".join(texts)
+
+

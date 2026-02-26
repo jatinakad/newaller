@@ -43,7 +43,7 @@ async def upload_report(
         file_bytes=file_bytes,
         content_type=file.content_type,
     )
-    return report
+    return ReportOut.model_validate(report)
 
 
 @router.get("/{patient_id}/reports", response_model=ReportListOut)
@@ -63,13 +63,14 @@ async def list_reports(
     )
 
 
-@router.delete("/{patient_id}/reports/{report_id}", status_code=204)
-async def delete_report(
+@router.put("/{patient_id}/reports/{report_id}", response_model=ReportOut, status_code=200)
+async def replace_report(
     patient_id: str,
     report_id: str,
+    file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete a patient report."""
+    """Replace a patient report with a new version. Old version is preserved in history."""
     patient = await patient_service.get_patient_by_external_id(db, patient_id)
     if not patient:
         raise HTTPException(status_code=404, detail=f"Patient '{patient_id}' not found")
@@ -80,8 +81,26 @@ async def delete_report(
     except ValueError:
         raise HTTPException(status_code=422, detail="Invalid report ID")
 
-    report = await report_service.get_report_by_id(db, rid)
-    if not report or report.patient_id != patient.id:
+    old_report = await report_service.get_report_by_id(db, rid)
+    if not old_report or old_report.patient_id != patient.id:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    await report_service.delete_report(db, report)
+    if file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"File type '{file.content_type}' not supported. Use PDF, JPEG, PNG, or WebP.",
+        )
+
+    file_bytes = await file.read()
+    if len(file_bytes) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=422, detail="File must be under 20MB")
+
+    new_report = await report_service.replace_report(
+        db=db,
+        old_report=old_report,
+        patient=patient,
+        filename=file.filename or "report",
+        file_bytes=file_bytes,
+        content_type=file.content_type,
+    )
+    return ReportOut.model_validate(new_report)

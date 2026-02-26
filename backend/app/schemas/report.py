@@ -9,6 +9,8 @@ class ReportOut(BaseModel):
     file_size: int
     content_type: str
     status: str
+    version: int=1
+    is_latest: bool=True
     extracted_text: str | None = None
     uploaded_at: datetime
     extracted_at: datetime | None = None

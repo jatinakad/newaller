@@ -81,6 +81,7 @@ async def check_prescription(
                 ingredient=w.get("ingredient", ""),
                 allergen=w.get("allergen", ""),
                 message=w.get("message", ""),
+                reasoning=w.get("reasoning", ""),
                 evidence={
                     "source": "AI_ANALYSIS",
                     "detail": f"MedGemma ({get_ai_backend().name})",
@@ -99,6 +100,7 @@ async def check_prescription(
         drug_results.append(DrugCheckResult(
             drug={"rxcui": "", "name": dr.get("drug_name", "Unknown")},
             signal=dr.get("signal", "YELLOW"),
+            reasoning=dr.get("reasoning", ""),
             warnings=warnings,
             alternatives=alternatives,
         ))

@@ -110,6 +110,10 @@ async def analyze_prescription(
                 "for safety. You must check ALL ingredients — both active AND inactive/excipients. "
                 "You must also check for cross-reactivity between drug families. "
                 "Be thorough but precise. Only flag real clinical risks, not theoretical ones.\n\n"
+                "IMPORTANT: For each drug AND each warning, provide detailed 'reasoning' that explains "
+                "your clinical rationale step-by-step: which specific ingredients are problematic, "
+                "what the cross-reactivity mechanism is, and reference any relevant data from the "
+                "patient reports or lab values. The reasoning should be 2-4 sentences.\n\n"
                 "Return ONLY valid JSON, no other text."
             ),
         },
@@ -136,13 +140,15 @@ async def analyze_prescription(
                 "    {\n"
                 '      "drug_name": "medicine name",\n'
                 '      "signal": "RED" or "YELLOW" or "GREEN",\n'
+                '      "reasoning": "detailed 2-4 sentence explanation of why this signal was given, referencing specific ingredients, patient allergies, report data, and clinical evidence",\n'
                 '      "warnings": [\n'
                 "        {\n"
                 '          "severity": "CRITICAL" or "HIGH" or "MODERATE" or "LOW",\n'
                 '          "type": "DIRECT_MATCH" or "CROSS_REACTIVITY" or "CONTRAINDICATION" or "LAB_CONCERN",\n'
                 '          "ingredient": "ingredient causing the issue",\n'
                 '          "allergen": "patient allergen it conflicts with",\n'
-                '          "message": "clear explanation of the risk"\n'
+                '          "message": "clear explanation of the risk",\n'
+                '          "reasoning": "detailed clinical reasoning: what the ingredient is, how it relates to the allergen, mechanism of reaction, and any supporting evidence from patient reports or lab values"\n'
                 "        }\n"
                 "      ],\n"
                 '      "alternatives": [\n'
@@ -160,7 +166,7 @@ async def analyze_prescription(
     ]
 
     try:
-        content = await backend.chat(messages, temperature=0.1, max_tokens=2000)
+        content = await backend.chat(messages, temperature=0.1, max_tokens=4000)
         result = _parse_json(content)
         if isinstance(result, dict):
             return result

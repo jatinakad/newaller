@@ -9,7 +9,7 @@ import {
   overridePrescription,
   uploadReport,
   getReports,
-  deleteReport,
+  replaceReport,
   type DrugResult,
   type PatientAllergyProfile,
   type PrescriptionCheckResponse,
@@ -48,7 +48,9 @@ export default function Home() {
   // Report state
   const [reports, setReports] = useState<PatientReport[]>([]);
   const [reportUploading, setReportUploading] = useState(false);
+  const [replacingReportId, setReplacingReportId] = useState<string | null>(null);
   const reportInputRef = useRef<HTMLInputElement>(null);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
 
   // --- Patient lookup ---
   const loadPatient = useCallback(async () => {
@@ -92,17 +94,23 @@ export default function Home() {
     [patient],
   );
 
-  const handleDeleteReport = useCallback(
-    async (reportId: string) => {
-      if (!patient) return;
+  const handleReplaceReport = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !patient || !replacingReportId) return;
+      setReportUploading(true);
       try {
-        await deleteReport(patient.external_id, reportId);
-        setReports((prev) => prev.filter((r) => r.id !== reportId));
+        const updated = await replaceReport(patient.external_id, replacingReportId, file);
+        setReports((prev) => prev.map((r) => (r.id === replacingReportId ? updated : r)));
       } catch (err: any) {
-        alert('Delete failed: ' + (err.message || 'Unknown error'));
+        alert('Replace failed: ' + (err.message || 'Unknown error'));
+      } finally {
+        setReportUploading(false);
+        setReplacingReportId(null);
+        if (replaceInputRef.current) replaceInputRef.current.value = '';
       }
     },
-    [patient],
+    [patient, replacingReportId],
   );
 
   // --- Drug search ---
@@ -134,6 +142,18 @@ export default function Home() {
       return [...prev, { rxcui: drug.rxcui, name: drug.name }];
     });
     setDrugQuery('');
+    setShowDropdown(false);
+  }, []);
+
+  const addDrugByName = useCallback((name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setSelectedDrugs((prev) => {
+      if (prev.some((d) => d.name.toLowerCase() === trimmed.toLowerCase())) return prev;
+      return [...prev, { name: trimmed }];
+    });
+    setDrugQuery('');
+    setDrugResults([]);
     setShowDropdown(false);
   }, []);
 
@@ -294,7 +314,17 @@ export default function Home() {
                       onChange={(e) => handleDrugSearch(e.target.value)}
                       onFocus={() => drugResults.length > 0 && setShowDropdown(true)}
                       onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-                      placeholder="Search drug name (e.g., Amoxicillin, Ibuprofen)..."
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (showDropdown && drugResults.length > 0) {
+                            addDrug(drugResults[0]);
+                          } else {
+                            addDrugByName(drugQuery);
+                          }
+                        }
+                      }}
+                      placeholder="Type drug name and press Enter, or select from list..."
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-900"
                     />
                     {showDropdown && drugResults.length > 0 && (
@@ -443,6 +473,14 @@ export default function Home() {
                       </span>
                     </div>
 
+                    {/* Drug-level reasoning */}
+                    {dr.reasoning && (
+                      <div className="mb-3 p-3 bg-white/80 border border-gray-200 rounded-lg">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">AI Reasoning</p>
+                        <p className="text-sm text-gray-700 leading-relaxed">{dr.reasoning}</p>
+                      </div>
+                    )}
+
                     {/* Warnings */}
                     {dr.warnings.length > 0 && (
                       <div className="mt-3 space-y-2">
@@ -452,8 +490,13 @@ export default function Home() {
                               <span className={`px-2 py-0.5 rounded text-xs font-bold text-white flex-shrink-0 mt-0.5 ${w.severity === 'CRITICAL' ? 'bg-red-600' : w.severity === 'HIGH' ? 'bg-orange-500' : w.severity === 'MODERATE' ? 'bg-yellow-500' : 'bg-gray-400'}`}>
                                 {w.severity}
                               </span>
-                              <div>
+                              <div className="flex-1">
                                 <p className="text-sm text-gray-800 font-medium">{w.message}</p>
+                                {w.reasoning && (
+                                  <p className="text-sm text-gray-600 mt-1.5 leading-relaxed bg-gray-50 p-2 rounded border border-gray-100">
+                                    {w.reasoning}
+                                  </p>
+                                )}
                                 <p className="text-xs text-gray-500 mt-1">
                                   Source: {w.evidence.source} | {w.evidence.detail}
                                 </p>
@@ -586,6 +629,14 @@ export default function Home() {
                 />
               </div>
 
+              <input
+                ref={replaceInputRef}
+                type="file"
+                accept="application/pdf,image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleReplaceReport}
+              />
+
               {reports.length > 0 ? (
                 <div className="space-y-2">
                   {reports.map((r) => (
@@ -597,6 +648,8 @@ export default function Home() {
                           </p>
                           <p className="text-xs text-gray-500 mt-0.5">
                             {(r.file_size / 1024).toFixed(1)} KB
+                            {' | '}
+                            <span className="text-gray-400">v{r.version}</span>
                             {' | '}
                             <span className={`font-medium ${
                               r.status === 'ready' ? 'text-green-600' :
@@ -610,12 +663,16 @@ export default function Home() {
                           </p>
                         </div>
                         <button
-                          onClick={() => handleDeleteReport(r.id)}
-                          className="text-red-400 hover:text-red-600 text-xs ml-2 flex-shrink-0"
-                          title="Delete report"
+                          onClick={() => {
+                            setReplacingReportId(r.id);
+                            replaceInputRef.current?.click();
+                          }}
+                          disabled={reportUploading}
+                          className="text-blue-500 hover:text-blue-700 text-xs ml-2 flex-shrink-0 disabled:opacity-50"
+                          title="Upload new version"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                           </svg>
                         </button>
                       </div>
