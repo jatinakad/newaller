@@ -16,6 +16,7 @@ openai==1.58.1
 passlib[bcrypt]==1.7.4
 tenacity==9.0.0
 structlog==24.4.0
+PyMuPDF==1.24.14
 
 # --- Optional: HuggingFace local backend (AI_BACKEND=huggingface_local) ---
 # Uncomment these if you want to run models locally via transformers:

@@ -1,4 +1,3 @@
-# NOTE: Replace with real configs for production
 version: "3.9"
 
 services:
@@ -84,6 +83,7 @@ services:
         condition: service_started
     volumes:
       - ./backend:/app
+      - backend_uploads:/app/uploads
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
       interval: 10s
@@ -133,3 +133,4 @@ volumes:
   pgdata:
   valkeydata:
   ollama_models:
+  backend_uploads:

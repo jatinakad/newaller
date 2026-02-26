@@ -7,10 +7,14 @@ import {
   checkPrescription,
   checkPrescriptionPhoto,
   overridePrescription,
+  uploadReport,
+  getReports,
+  deleteReport,
   type DrugResult,
   type PatientAllergyProfile,
   type PrescriptionCheckResponse,
   type DrugCheckResult,
+  type PatientReport,
 } from '@/lib/api';
 
 export default function Home() {
@@ -41,6 +45,11 @@ export default function Home() {
   const [overrideJustification, setOverrideJustification] = useState('');
   const [overrideLoading, setOverrideLoading] = useState(false);
 
+  // Report state
+  const [reports, setReports] = useState<PatientReport[]>([]);
+  const [reportUploading, setReportUploading] = useState(false);
+  const reportInputRef = useRef<HTMLInputElement>(null);
+
   // --- Patient lookup ---
   const loadPatient = useCallback(async () => {
     if (!patientId.trim()) return;
@@ -48,15 +57,53 @@ export default function Home() {
     setPatientError('');
     setPatient(null);
     setCheckResult(null);
+    setReports([]);
     try {
       const profile = await getPatientProfile(patientId.trim());
       setPatient(profile);
+      // Load reports for this patient
+      try {
+        const rData = await getReports(patientId.trim());
+        setReports(rData.reports);
+      } catch { /* no reports yet */ }
     } catch (e: any) {
       setPatientError(e.message || 'Patient not found');
     } finally {
       setPatientLoading(false);
     }
   }, [patientId]);
+
+  // --- Report upload ---
+  const handleReportUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file || !patient) return;
+      setReportUploading(true);
+      try {
+        const report = await uploadReport(patient.external_id, file);
+        setReports((prev) => [report, ...prev]);
+      } catch (err: any) {
+        alert('Report upload failed: ' + (err.message || 'Unknown error'));
+      } finally {
+        setReportUploading(false);
+        if (reportInputRef.current) reportInputRef.current.value = '';
+      }
+    },
+    [patient],
+  );
+
+  const handleDeleteReport = useCallback(
+    async (reportId: string) => {
+      if (!patient) return;
+      try {
+        await deleteReport(patient.external_id, reportId);
+        setReports((prev) => prev.filter((r) => r.id !== reportId));
+      } catch (err: any) {
+        alert('Delete failed: ' + (err.message || 'Unknown error'));
+      }
+    },
+    [patient],
+  );
 
   // --- Drug search ---
   const handleDrugSearch = useCallback(
@@ -359,6 +406,29 @@ export default function Home() {
                 </div>
               )}
 
+              {/* Citations */}
+              {checkResult.citations && checkResult.citations.length > 0 && (
+                <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                  <p className="text-sm font-semibold text-indigo-800 mb-2">References & Citations</p>
+                  <div className="space-y-1">
+                    {checkResult.citations.map((c, ci) => (
+                      <a
+                        key={ci}
+                        href={c.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 hover:underline"
+                      >
+                        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                        {c.source}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Per-drug results */}
               <div className="space-y-4">
                 {checkResult.drug_results.map((dr, i) => (
@@ -492,6 +562,69 @@ export default function Home() {
                   <p className="text-sm text-gray-400 italic">No known allergies or conditions on file.</p>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Patient Reports */}
+          {patient && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-gray-800">Patient Reports</h3>
+                <button
+                  onClick={() => reportInputRef.current?.click()}
+                  disabled={reportUploading}
+                  className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {reportUploading ? 'Uploading...' : '+ Upload'}
+                </button>
+                <input
+                  ref={reportInputRef}
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handleReportUpload}
+                />
+              </div>
+
+              {reports.length > 0 ? (
+                <div className="space-y-2">
+                  {reports.map((r) => (
+                    <div key={r.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                      <div className="flex items-start justify-between">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-800 truncate" title={r.filename}>
+                            {r.filename}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {(r.file_size / 1024).toFixed(1)} KB
+                            {' | '}
+                            <span className={`font-medium ${
+                              r.status === 'ready' ? 'text-green-600' :
+                              r.status === 'extracting' ? 'text-yellow-600' :
+                              r.status === 'failed' ? 'text-red-600' : 'text-gray-500'
+                            }`}>
+                              {r.status === 'ready' ? 'Indexed' :
+                               r.status === 'extracting' ? 'Processing...' :
+                               r.status === 'failed' ? 'Failed' : 'Pending'}
+                            </span>
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteReport(r.id)}
+                          className="text-red-400 hover:text-red-600 text-xs ml-2 flex-shrink-0"
+                          title="Delete report"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400 italic">No reports uploaded yet. Upload lab reports or medical documents to enhance allergy checks.</p>
+              )}
             </div>
           )}
 

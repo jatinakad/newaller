@@ -34,6 +34,11 @@ export interface DrugCheckResult {
   alternatives: AlternativeDrug[];
 }
 
+export interface Citation {
+  source: string;
+  url: string;
+}
+
 export interface PrescriptionCheckResponse {
   request_id: string;
   patient_id: string;
@@ -42,6 +47,18 @@ export interface PrescriptionCheckResponse {
   processing_time_ms: number;
   ocr_confidence?: number;
   extracted_drugs?: string[];
+  citations?: Citation[];
+}
+
+export interface PatientReport {
+  id: string;
+  filename: string;
+  file_size: number;
+  content_type: string;
+  status: string;
+  extracted_text?: string;
+  uploaded_at: string;
+  extracted_at?: string;
 }
 
 export interface PatientAllergyProfile {
@@ -138,4 +155,41 @@ export async function overridePrescription(
   });
   if (!res.ok) throw new Error('Override failed');
   return res.json();
+}
+
+export async function uploadReport(
+  patientId: string,
+  file: File,
+): Promise<PatientReport> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch(`${API_BASE}/api/v1/patients/${encodeURIComponent(patientId)}/reports`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Report upload failed');
+  }
+  return res.json();
+}
+
+export async function getReports(
+  patientId: string,
+): Promise<{ reports: PatientReport[]; total: number }> {
+  const res = await fetch(`${API_BASE}/api/v1/patients/${encodeURIComponent(patientId)}/reports`);
+  if (!res.ok) throw new Error('Failed to load reports');
+  return res.json();
+}
+
+export async function deleteReport(
+  patientId: string,
+  reportId: string,
+): Promise<void> {
+  const res = await fetch(
+    `${API_BASE}/api/v1/patients/${encodeURIComponent(patientId)}/reports/${encodeURIComponent(reportId)}`,
+    { method: 'DELETE' },
+  );
+  if (!res.ok) throw new Error('Failed to delete report');
 }

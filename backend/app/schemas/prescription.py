@@ -37,6 +37,11 @@ class DrugCheckResult(BaseModel):
     alternatives: list[AlternativeDrug] = []
 
 
+class Citation(BaseModel):
+    source: str
+    url: str
+
+
 class PrescriptionCheckResponse(BaseModel):
     request_id: str
     patient_id: str
@@ -45,6 +50,7 @@ class PrescriptionCheckResponse(BaseModel):
     processing_time_ms: int
     ocr_confidence: float | None = None
     extracted_drugs: list[str] | None = None
+    citations: list[Citation] = []
 
 
 class OverrideRequest(BaseModel):

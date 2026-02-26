@@ -6,7 +6,7 @@ from sqlalchemy import text
 from app.config import get_settings
 from app.db.session import engine, Base
 from app.db.redis import redis_client
-from app.api.routes import drugs, patients, prescription
+from app.api.routes import drugs, patients, prescription, reports
 
 settings = get_settings()
 
@@ -66,6 +66,7 @@ app.add_middleware(
 app.include_router(drugs.router)
 app.include_router(patients.router)
 app.include_router(prescription.router)
+app.include_router(reports.router)
 
 
 @app.get("/health")
