@@ -1,18 +1,3 @@
-version: '3.8'
-services:
-  backend:
-    build: ./backend
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./backend:/app
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend:/usr/src/app
-
 # NOTE: Replace with real configs for production
 version: "3.9"
 

@@ -9,10 +9,11 @@ class Settings(BaseSettings):
     DATABASE_URL_SYNC: str = "postgresql://medguard:medguard_secret@postgres:5432/medguard"
 
     # Redis / Valkey
-    REDIS_URL: str = "redis://valkey:6379/0"
+    # REDIS_URL: str = "redis://valkey:6379/0"
+    REDIS_URL: str = "redis://:fzUEbVAqTqxN68fDieGWfAAcrGiULwcJ@redis-10333.c322.us-east-1-2.ec2.cloud.redislabs.com:10333"
 
     # AI Backend: "ollama", "huggingface_local", "huggingface_api"
-    AI_BACKEND: str = "ollama"
+    AI_BACKEND: str = "huggingface_api"
 
     # Ollama settings
     OLLAMA_BASE_URL: str = "http://ollama:11434"
@@ -20,7 +21,7 @@ class Settings(BaseSettings):
 
     # HuggingFace settings (local transformers or Inference API)
     HF_MODEL_ID: str = "google/medgemma-4b-it"
-    HF_TOKEN: str = ""  # Required for gated models like MedGemma
+    HF_TOKEN: str = "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"  # Required for gated models like MedGemma
     HF_DEVICE: str = "auto"  # auto, cpu, cuda, mps
     HF_TORCH_DTYPE: str = "auto"  # auto, float16, bfloat16, float32
     HF_MAX_NEW_TOKENS: int = 1024
