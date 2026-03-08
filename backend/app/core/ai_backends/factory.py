@@ -12,7 +12,8 @@ def get_ai_backend() -> AIBackend:
     Factory: returns the configured AI backend singleton.
 
     Set AI_BACKEND env var to one of:
-      - "ollama"            → Ollama local server (default)
+      - "gemini"            → Google Gemini API via AI Studio (recommended)
+      - "ollama"            → Ollama local server
       - "huggingface_local" → HuggingFace Transformers loaded in-process (needs GPU/RAM)
       - "huggingface_api"   → HuggingFace Inference API (free tier, needs HF_TOKEN)
     """
@@ -23,7 +24,11 @@ def get_ai_backend() -> AIBackend:
     settings = get_settings()
     backend_name = settings.AI_BACKEND.lower().strip()
 
-    if backend_name == "ollama":
+    if backend_name == "gemini":
+        from app.core.ai_backends.gemini_backend import GeminiBackend
+        _backend_instance = GeminiBackend()
+
+    elif backend_name == "ollama":
         from app.core.ai_backends.ollama_backend import OllamaBackend
         _backend_instance = OllamaBackend()
 
@@ -38,7 +43,7 @@ def get_ai_backend() -> AIBackend:
     else:
         raise ValueError(
             f"Unknown AI_BACKEND: '{backend_name}'. "
-            f"Must be one of: ollama, huggingface_local, huggingface_api"
+            f"Must be one of: gemini, ollama, huggingface_local, huggingface_api"
         )
 
     logger.info("ai_backend_initialized", backend=_backend_instance.name)

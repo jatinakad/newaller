@@ -84,7 +84,7 @@ async def check_prescription(
                 reasoning=w.get("reasoning", ""),
                 evidence={
                     "source": "AI_ANALYSIS",
-                    "detail": f"MedGemma ({get_ai_backend().name})",
+                    "detail": f"AI Analysis ({get_ai_backend().name})",
                 },
             ))
 

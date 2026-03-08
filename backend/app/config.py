@@ -12,8 +12,12 @@ class Settings(BaseSettings):
     # REDIS_URL: str = "redis://valkey:6379/0"
     REDIS_URL: str = "redis://:fzUEbVAqTqxN68fDieGWfAAcrGiULwcJ@redis-10333.c322.us-east-1-2.ec2.cloud.redislabs.com:10333"
 
-    # AI Backend: "ollama", "huggingface_local", "huggingface_api"
-    AI_BACKEND: str = "huggingface_api"
+    # AI Backend: "gemini", "ollama", "huggingface_local", "huggingface_api"
+    AI_BACKEND: str = "gemini"
+
+    # Gemini settings (Google AI Studio)
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.0-flash"
 
     # Ollama settings
     OLLAMA_BASE_URL: str = "http://ollama:11434"
@@ -43,7 +47,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     APP_SECRET_KEY: str = "change-me-in-production"
     APP_DEBUG: bool = True
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:8080"
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001,http://localhost:8080"
 
     # OpenFDA
     OPENFDA_API_URL: str = "https://api.fda.gov/drug"

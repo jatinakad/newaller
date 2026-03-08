@@ -71,6 +71,7 @@ export interface PatientAllergyProfile {
   name: string;
   age?: number;
   gender?: string;
+  weight_kg?: number;
   allergies: {
     id: string;
     allergen_name: string;
@@ -93,6 +94,24 @@ export interface PatientAllergyProfile {
     condition_name: string;
     contraindicated_ingredients?: string[];
   }[];
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatResponse {
+  answer: string;
+  patient_name: string;
+  patient_id: string;
+  context_used: {
+    allergies_count: number;
+    conditions_count: number;
+    lab_values_count: number;
+    reports_available: boolean;
+  };
+  error: boolean;
 }
 
 export async function searchDrugs(query: string): Promise<{ results: DrugResult[]; total: number }> {
@@ -202,6 +221,92 @@ export async function replaceReport(
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Report replace failed');
+  }
+  return res.json();
+}
+
+export async function askAI(
+  patientId: string,
+  question: string,
+  medicineName: string = '',
+  conversationHistory: ChatMessage[] = [],
+): Promise<ChatResponse> {
+  const res = await fetch(`${API_BASE}/api/v1/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      patient_id: patientId,
+      question,
+      medicine_name: medicineName,
+      conversation_history: conversationHistory.map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'AI chat failed');
+  }
+  return res.json();
+}
+
+export async function createPatient(data: {
+  external_id: string;
+  name: string;
+  age?: number;
+  gender?: string;
+  weight_kg?: number;
+}): Promise<PatientAllergyProfile> {
+  const res = await fetch(`${API_BASE}/api/v1/patients`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to create patient');
+  }
+  return res.json();
+}
+
+export async function addAllergy(
+  patientId: string,
+  data: {
+    allergen_name: string;
+    category?: string;
+    criticality?: string;
+    reaction_manifestations?: string[];
+    reaction_severity?: string;
+  },
+): Promise<unknown> {
+  const res = await fetch(`${API_BASE}/api/v1/patients/${encodeURIComponent(patientId)}/allergies`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to add allergy');
+  }
+  return res.json();
+}
+
+export async function addCondition(
+  patientId: string,
+  data: {
+    condition_name: string;
+    contraindicated_ingredients?: string[];
+  },
+): Promise<unknown> {
+  const res = await fetch(`${API_BASE}/api/v1/patients/${encodeURIComponent(patientId)}/conditions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to add condition');
   }
   return res.json();
 }

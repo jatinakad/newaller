@@ -6,7 +6,9 @@ from sqlalchemy import text
 from app.config import get_settings
 from app.db.session import engine, Base
 from app.db.redis import redis_client
-from app.api.routes import drugs, patients, prescription, reports
+from app.api.routes import drugs, patients, prescription, reports, chat
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 
 settings = get_settings()
 
@@ -67,6 +69,12 @@ app.include_router(drugs.router)
 app.include_router(patients.router)
 app.include_router(prescription.router)
 app.include_router(reports.router)
+app.include_router(chat.router)
+
+# Serve uploaded files
+UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 
 @app.get("/health")

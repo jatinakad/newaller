@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'MedGuard — Medicine Allergy Detection',
-  description: 'Prevent allergic reactions by checking prescriptions against patient allergy profiles',
+  title: 'AllerSense — AI-Powered Allergy Prevention',
+  description: 'AI-powered patient allergy prevention system with Gemini AI analysis',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
