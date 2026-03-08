@@ -455,9 +455,86 @@ export default function DoctorPortal() {
                                 {r.status === 'ready' ? 'Indexed' : r.status === 'extracting' ? 'Processing...' : r.status === 'failed' ? 'Failed' : 'Pending'}
                               </span>
                             </p>
-                            {r.extracted_text && (
+                            {r.structured_data && (
                               <details className="mt-2">
-                                <summary className="text-xs text-blue-600 cursor-pointer hover:text-blue-800">View extracted text</summary>
+                                <summary className="text-xs text-emerald-600 cursor-pointer hover:text-emerald-800 font-medium">View structured data</summary>
+                                <div className="mt-2 space-y-2 text-xs">
+                                  {r.structured_data.summary && (
+                                    <div className="bg-blue-50 border border-blue-200 rounded p-2">
+                                      <span className="font-semibold text-blue-700">Summary:</span>
+                                      <p className="text-blue-800 mt-0.5">{r.structured_data.summary}</p>
+                                    </div>
+                                  )}
+                                  {r.structured_data.document_type && (
+                                    <span className="inline-block bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full font-medium">{r.structured_data.document_type.replace(/_/g, ' ')}</span>
+                                  )}
+                                  {r.structured_data.medications && r.structured_data.medications.length > 0 && (
+                                    <div className="bg-orange-50 border border-orange-200 rounded p-2">
+                                      <p className="font-semibold text-orange-700 mb-1">Medications ({r.structured_data.medications.length})</p>
+                                      {r.structured_data.medications.map((m, mi) => (
+                                        <div key={mi} className="flex flex-wrap gap-1 mb-1">
+                                          <span className="font-medium text-orange-900">{m.name}</span>
+                                          {m.dosage && <span className="text-orange-600">• {m.dosage}</span>}
+                                          {m.frequency && <span className="text-orange-600">• {m.frequency}</span>}
+                                          {m.route && <span className="text-orange-500">• {m.route}</span>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {r.structured_data.lab_results && r.structured_data.lab_results.length > 0 && (
+                                    <div className="bg-yellow-50 border border-yellow-200 rounded p-2">
+                                      <p className="font-semibold text-yellow-700 mb-1">Lab Results ({r.structured_data.lab_results.length})</p>
+                                      <table className="w-full text-left">
+                                        <thead><tr className="text-yellow-700"><th className="pr-2">Test</th><th className="pr-2">Value</th><th className="pr-2">Ref Range</th><th>Status</th></tr></thead>
+                                        <tbody>
+                                          {r.structured_data.lab_results.map((lr, li) => (
+                                            <tr key={li} className={lr.interpretation === 'critical' ? 'text-red-700 font-bold' : lr.interpretation === 'high' || lr.interpretation === 'low' ? 'text-yellow-800 font-medium' : 'text-gray-700'}>
+                                              <td className="pr-2">{lr.test_name}</td>
+                                              <td className="pr-2">{lr.value} {lr.unit || ''}</td>
+                                              <td className="pr-2">{lr.reference_range || '-'}</td>
+                                              <td><span className={`px-1.5 py-0.5 rounded ${lr.interpretation === 'normal' ? 'bg-green-100 text-green-700' : lr.interpretation === 'critical' ? 'bg-red-200 text-red-800' : lr.interpretation === 'high' ? 'bg-yellow-200 text-yellow-800' : lr.interpretation === 'low' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>{lr.interpretation || '?'}</span></td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  )}
+                                  {r.structured_data.diagnoses && r.structured_data.diagnoses.length > 0 && (
+                                    <div className="bg-purple-50 border border-purple-200 rounded p-2">
+                                      <p className="font-semibold text-purple-700 mb-1">Diagnoses</p>
+                                      {r.structured_data.diagnoses.map((d, di) => (
+                                        <div key={di} className="flex items-center gap-2 mb-0.5">
+                                          <span className="text-purple-800 font-medium">{d.condition}</span>
+                                          {d.icd_code && <span className="text-purple-500 bg-purple-100 px-1 rounded">{d.icd_code}</span>}
+                                          {d.status && <span className="text-purple-400">[{d.status}]</span>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {r.structured_data.allergies_mentioned && r.structured_data.allergies_mentioned.length > 0 && (
+                                    <div className="bg-red-50 border border-red-200 rounded p-2">
+                                      <p className="font-semibold text-red-700 mb-1">Allergies Mentioned</p>
+                                      <div className="flex flex-wrap gap-1">{r.structured_data.allergies_mentioned.map((a, ai) => (<span key={ai} className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{a}</span>))}</div>
+                                    </div>
+                                  )}
+                                  {r.structured_data.vitals && r.structured_data.vitals.length > 0 && (
+                                    <div className="bg-teal-50 border border-teal-200 rounded p-2">
+                                      <p className="font-semibold text-teal-700 mb-1">Vitals</p>
+                                      <div className="flex flex-wrap gap-2">{r.structured_data.vitals.map((v, vi) => (<span key={vi} className="bg-teal-100 text-teal-800 px-2 py-0.5 rounded">{v.name}: {v.value} {v.unit || ''}</span>))}</div>
+                                    </div>
+                                  )}
+                                  {r.structured_data.clinical_notes && (
+                                    <div className="bg-gray-50 border border-gray-200 rounded p-2">
+                                      <p className="font-semibold text-gray-600 mb-0.5">Clinical Notes</p>
+                                      <p className="text-gray-700">{r.structured_data.clinical_notes}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </details>
+                            )}
+                            {r.extracted_text && (
+                              <details className="mt-1">
+                                <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600">View raw text</summary>
                                 <pre className="mt-1 text-xs text-gray-600 bg-gray-100 p-2 rounded max-h-40 overflow-y-auto whitespace-pre-wrap">{r.extracted_text}</pre>
                               </details>
                             )}
@@ -488,17 +565,23 @@ export default function DoctorPortal() {
                     {!photoMode ? (
                       <>
                         <div className="relative mb-4">
-                          <input type="text" value={drugQuery} onChange={(e) => handleDrugSearch(e.target.value)} onFocus={() => drugResults.length > 0 && setShowDropdown(true)} onBlur={() => setTimeout(() => setShowDropdown(false), 200)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); showDropdown && drugResults.length > 0 ? addDrug(drugResults[0]) : addDrugByName(drugQuery); } }} placeholder="Type drug/medicine name and press Enter..." className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-900" />
-                          {showDropdown && drugResults.length > 0 && (
-                            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                              {drugResults.map((drug) => (
-                                <button key={drug.id} onMouseDown={() => addDrug(drug)} className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-gray-100 last:border-0">
-                                  <div className="font-medium text-gray-900">{drug.name}</div>
-                                  <div className="text-xs text-gray-500">{drug.generic_name} {drug.dosage_form && `| ${drug.dosage_form}`}</div>
-                                </button>
-                              ))}
+                          <div className="flex gap-2">
+                            <div className="relative flex-1">
+                              <input type="text" value={drugQuery} onChange={(e) => handleDrugSearch(e.target.value)} onFocus={() => drugResults.length > 0 && setShowDropdown(true)} onBlur={() => setTimeout(() => setShowDropdown(false), 200)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); showDropdown && drugResults.length > 0 ? addDrug(drugResults[0]) : addDrugByName(drugQuery); } }} placeholder="Type any drug/medicine name..." className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-900" />
+                              {showDropdown && drugResults.length > 0 && (
+                                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                                  {drugResults.map((drug) => (
+                                    <button key={drug.id} onMouseDown={() => addDrug(drug)} className="w-full text-left px-4 py-3 hover:bg-blue-50 border-b border-gray-100 last:border-0">
+                                      <div className="font-medium text-gray-900">{drug.name}</div>
+                                      <div className="text-xs text-gray-500">{drug.generic_name} {drug.dosage_form && `| ${drug.dosage_form}`}</div>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                          )}
+                            <button onClick={() => addDrugByName(drugQuery)} disabled={!drugQuery.trim()} className="px-5 py-2.5 bg-gray-700 text-white rounded-lg hover:bg-gray-800 disabled:opacity-40 font-medium transition-colors whitespace-nowrap">+ Add</button>
+                          </div>
+                          <p className="text-xs text-gray-400 mt-1">Type any medicine name and click Add or press Enter. You can also pick from suggestions if available.</p>
                         </div>
                         {selectedDrugs.length > 0 && (
                           <div className="space-y-2 mb-4">

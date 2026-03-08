@@ -68,6 +68,64 @@ async def _extract_text_from_image_via_ai(image_bytes: bytes) -> str:
         return ""
 
 
+async def _parse_text_to_structured_data(raw_text: str) -> dict | None:
+    """Use Gemini AI to parse raw extracted text into structured medical data JSON."""
+    if not raw_text or len(raw_text.strip()) < 20:
+        return None
+
+    backend = get_ai_backend()
+    prompt = (
+        "You are a medical data extraction AI. Parse the following medical document text "
+        "into a structured JSON object. Extract ALL relevant information into these categories:\n\n"
+        "{\n"
+        '  "document_type": "lab_report | prescription | discharge_summary | radiology | pathology | other",\n'
+        '  "patient_info": { "name": "", "id": "", "age": "", "gender": "", "date_of_birth": "" },\n'
+        '  "document_date": "YYYY-MM-DD or raw date string",\n'
+        '  "doctor_info": { "name": "", "specialty": "", "facility": "" },\n'
+        '  "medications": [\n'
+        '    { "name": "", "dosage": "", "frequency": "", "route": "", "duration": "", "instructions": "" }\n'
+        "  ],\n"
+        '  "lab_results": [\n'
+        '    { "test_name": "", "value": "", "unit": "", "reference_range": "", "interpretation": "normal|high|low|critical" }\n'
+        "  ],\n"
+        '  "diagnoses": [\n'
+        '    { "condition": "", "icd_code": "", "status": "active|resolved|suspected" }\n'
+        "  ],\n"
+        '  "allergies_mentioned": ["substance1", "substance2"],\n'
+        '  "vitals": [\n'
+        '    { "name": "", "value": "", "unit": "" }\n'
+        "  ],\n"
+        '  "procedures": [\n'
+        '    { "name": "", "date": "", "notes": "" }\n'
+        "  ],\n"
+        '  "clinical_notes": "any free-text clinical observations or notes",\n'
+        '  "summary": "A brief 2-3 sentence summary of the document"\n'
+        "}\n\n"
+        "Rules:\n"
+        "- Only include categories that have actual data. Omit empty arrays/objects.\n"
+        "- For lab results, always try to determine interpretation (normal/high/low/critical).\n"
+        "- Return ONLY valid JSON, no markdown fences, no explanation.\n"
+        "- If the text is not a medical document, return {\"document_type\": \"other\", \"summary\": \"...\"}\n\n"
+        f"Document text:\n{raw_text[:8000]}"
+    )
+
+    try:
+        messages = [{"role": "user", "content": prompt}]
+        response = await backend.chat(messages, temperature=0.1, max_tokens=3000)
+        # Parse JSON from response
+        import json
+        cleaned = response.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[-1]
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3]
+            cleaned = cleaned.strip()
+        return json.loads(cleaned)
+    except Exception as e:
+        logger.error("structured_data_parsing_failed", error=str(e))
+        return None
+
+
 async def upload_and_extract(
     db: AsyncSession,
     patient: Patient,
@@ -120,6 +178,15 @@ async def upload_and_extract(
         report.extracted_text = extracted_text
         report.status = "ready" if extracted_text else "failed"
         report.extracted_at = datetime.now(timezone.utc)
+
+        # Parse extracted text into structured data using AI
+        if extracted_text:
+            try:
+                structured = await _parse_text_to_structured_data(extracted_text)
+                report.structured_data = structured
+                logger.info("structured_data_parsed", report_id=str(file_id), has_data=structured is not None)
+            except Exception as se:
+                logger.error("structured_parsing_failed", report_id=str(file_id), error=str(se))
 
     except Exception as e:
         logger.error("text_extraction_failed", report_id=str(file_id), error=str(e))
@@ -176,16 +243,46 @@ async def replace_report(
 
 
 async def get_all_report_texts(db: AsyncSession, patient_id: uuid.UUID) -> str:
-    """Get concatenated extracted text from all latest ready reports for a patient."""
+    """Get concatenated extracted text from all latest ready reports for a patient.
+    Prefers structured_data summaries when available, falls back to raw extracted_text."""
+    import json
     result = await db.execute(
-        select(PatientReport.extracted_text)
+        select(PatientReport.extracted_text, PatientReport.structured_data)
         .where(PatientReport.patient_id == patient_id)
         .where(PatientReport.status == "ready")
         .where(PatientReport.is_latest == True)
         .where(PatientReport.extracted_text.isnot(None))
         .order_by(PatientReport.uploaded_at.desc())
     )
-    texts = [row[0] for row in result.all() if row[0]]
-    return "\n\n---\n\n".join(texts)
+    parts = []
+    for row in result.all():
+        raw_text, structured = row[0], row[1]
+        if structured:
+            # Build a concise structured summary for AI context
+            lines = []
+            if structured.get("document_type"):
+                lines.append(f"Document type: {structured['document_type']}")
+            if structured.get("summary"):
+                lines.append(f"Summary: {structured['summary']}")
+            if structured.get("medications"):
+                med_names = [m.get("name", "") + (" " + m.get("dosage", "")).strip() for m in structured["medications"]]
+                lines.append(f"Medications: {', '.join(med_names)}")
+            if structured.get("lab_results"):
+                for lr in structured["lab_results"]:
+                    lines.append(f"Lab: {lr.get('test_name', '')} = {lr.get('value', '')} {lr.get('unit', '')} ({lr.get('interpretation', 'unknown')})")
+            if structured.get("diagnoses"):
+                diag_names = [d.get("condition", "") for d in structured["diagnoses"]]
+                lines.append(f"Diagnoses: {', '.join(diag_names)}")
+            if structured.get("allergies_mentioned"):
+                lines.append(f"Allergies mentioned in report: {', '.join(structured['allergies_mentioned'])}")
+            if structured.get("vitals"):
+                vital_strs = [f"{v.get('name','')}: {v.get('value','')} {v.get('unit','')}" for v in structured["vitals"]]
+                lines.append(f"Vitals: {', '.join(vital_strs)}")
+            if structured.get("clinical_notes"):
+                lines.append(f"Clinical notes: {structured['clinical_notes']}")
+            parts.append("\n".join(lines))
+        elif raw_text:
+            parts.append(raw_text)
+    return "\n\n---\n\n".join(parts)
 
 

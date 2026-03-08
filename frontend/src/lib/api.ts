@@ -52,6 +52,21 @@ export interface PrescriptionCheckResponse {
   citations?: Citation[];
 }
 
+export interface ReportStructuredData {
+  document_type?: string;
+  patient_info?: { name?: string; id?: string; age?: string; gender?: string; date_of_birth?: string };
+  document_date?: string;
+  doctor_info?: { name?: string; specialty?: string; facility?: string };
+  medications?: { name: string; dosage?: string; frequency?: string; route?: string; duration?: string; instructions?: string }[];
+  lab_results?: { test_name: string; value: string; unit?: string; reference_range?: string; interpretation?: string }[];
+  diagnoses?: { condition: string; icd_code?: string; status?: string }[];
+  allergies_mentioned?: string[];
+  vitals?: { name: string; value: string; unit?: string }[];
+  procedures?: { name: string; date?: string; notes?: string }[];
+  clinical_notes?: string;
+  summary?: string;
+}
+
 export interface PatientReport {
   id: string;
   filename: string;
@@ -61,6 +76,7 @@ export interface PatientReport {
   version: number;
   is_latest: boolean;
   extracted_text?: string;
+  structured_data?: ReportStructuredData;
   uploaded_at: string;
   extracted_at?: string;
 }
