@@ -30,12 +30,19 @@ class Settings(BaseSettings):
     HF_TORCH_DTYPE: str = "auto"  # auto, float16, bfloat16, float32
     HF_MAX_NEW_TOKENS: int = 1024
 
-    # MinIO
+    # MinIO (local dev)
     MINIO_ENDPOINT: str = "minio:9000"
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin123"
     MINIO_BUCKET: str = "prescriptions"
     MINIO_USE_SSL: bool = False
+
+    # AWS S3 (production file storage)
+    USE_S3: bool = False  # Set to true in production
+    S3_BUCKET: str = "allersense-reports"
+    S3_REGION: str = "us-east-1"
+    AWS_ACCESS_KEY_ID: str = ""  # Leave empty to use IAM role (recommended on App Runner)
+    AWS_SECRET_ACCESS_KEY: str = ""
 
     # Keycloak
     KEYCLOAK_URL: str = "http://keycloak:8080"

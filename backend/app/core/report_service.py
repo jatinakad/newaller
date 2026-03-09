@@ -1,5 +1,6 @@
 import os
 import uuid
+import tempfile
 import structlog
 from datetime import datetime, timezone
 from pathlib import Path
@@ -8,10 +9,36 @@ from sqlalchemy import select
 from app.models.report import PatientReport
 from app.models.patient import Patient
 from app.core.ai_backends import get_ai_backend
+from app.config import get_settings
 
 logger = structlog.get_logger()
 
 UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
+
+
+def _get_s3_client():
+    """Get boto3 S3 client. Uses IAM role if no explicit keys."""
+    import boto3
+    settings = get_settings()
+    kwargs = {"region_name": settings.S3_REGION}
+    if settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY:
+        kwargs["aws_access_key_id"] = settings.AWS_ACCESS_KEY_ID
+        kwargs["aws_secret_access_key"] = settings.AWS_SECRET_ACCESS_KEY
+    return boto3.client("s3", **kwargs)
+
+
+def _upload_to_s3(file_bytes: bytes, s3_key: str, content_type: str) -> str:
+    """Upload file bytes to S3 and return the S3 key."""
+    settings = get_settings()
+    s3 = _get_s3_client()
+    s3.put_object(
+        Bucket=settings.S3_BUCKET,
+        Key=s3_key,
+        Body=file_bytes,
+        ContentType=content_type,
+    )
+    logger.info("s3_upload_success", bucket=settings.S3_BUCKET, key=s3_key)
+    return s3_key
 
 
 def _ensure_upload_dir(patient_id: uuid.UUID) -> Path:
@@ -133,23 +160,39 @@ async def upload_and_extract(
     file_bytes: bytes,
     content_type: str,
 ) -> PatientReport:
-    """Upload a report file, extract text, and store in DB."""
-    patient_dir = _ensure_upload_dir(patient.id)
+    """Upload a report file, extract text, and store in DB.
+    Supports both local disk (dev) and S3 (production) storage."""
+    settings = get_settings()
     file_id = uuid.uuid4()
     ext = os.path.splitext(filename)[1] or ".pdf"
     stored_filename = f"{file_id}{ext}"
-    file_path = patient_dir / stored_filename
 
-    # Write file to disk
-    with open(file_path, "wb") as f:
+    # Write to local disk (always needed for PDF text extraction)
+    if settings.USE_S3:
+        # Use temp dir for extraction, then upload to S3
+        tmp_dir = Path(tempfile.mkdtemp())
+        local_file_path = tmp_dir / stored_filename
+    else:
+        patient_dir = _ensure_upload_dir(patient.id)
+        local_file_path = patient_dir / stored_filename
+
+    with open(local_file_path, "wb") as f:
         f.write(file_bytes)
+
+    # Determine storage path
+    if settings.USE_S3:
+        s3_key = f"reports/{patient.id}/{stored_filename}"
+        _upload_to_s3(file_bytes, s3_key, content_type)
+        stored_path = f"s3://{settings.S3_BUCKET}/{s3_key}"
+    else:
+        stored_path = str(local_file_path)
 
     # Create DB record
     report = PatientReport(
         id=file_id,
         patient_id=patient.id,
         filename=filename,
-        file_path=str(file_path),
+        file_path=stored_path,
         file_size=len(file_bytes),
         content_type=content_type,
         status="extracting",
@@ -157,15 +200,15 @@ async def upload_and_extract(
     db.add(report)
     await db.flush()
 
-    # Extract text
+    # Extract text (uses local file)
     extracted_text = ""
     try:
         if content_type == "application/pdf":
-            extracted_text = _extract_text_from_pdf(str(file_path))
+            extracted_text = _extract_text_from_pdf(str(local_file_path))
             # If PDF has very little text, it's likely scanned — convert pages to images and OCR
             if len(extracted_text.strip()) < 50:
                 logger.info("pdf_appears_scanned", report_id=str(file_id))
-                page_images = _pdf_pages_to_images(str(file_path))
+                page_images = _pdf_pages_to_images(str(local_file_path))
                 page_texts = []
                 for img_bytes in page_images:
                     page_text = await _extract_text_from_image_via_ai(img_bytes)
@@ -191,6 +234,14 @@ async def upload_and_extract(
     except Exception as e:
         logger.error("text_extraction_failed", report_id=str(file_id), error=str(e))
         report.status = "failed"
+
+    # Cleanup temp file if using S3
+    if settings.USE_S3:
+        try:
+            os.remove(local_file_path)
+            os.rmdir(local_file_path.parent)
+        except OSError:
+            pass
 
     await db.commit()
     await db.refresh(report)
